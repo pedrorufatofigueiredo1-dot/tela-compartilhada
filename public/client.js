@@ -143,14 +143,41 @@ function stopSharing() {
   socket.emit('stop-sharing');
 }
 
+// ---------- Sair da sala ----------
+
+const leaveBtn = document.getElementById('leave-btn');
+leaveBtn.addEventListener('click', leaveRoom);
+
+function leaveRoom() {
+  if (isSharing) stopSharing();
+
+  incomingConnections.forEach((pc) => pc.close());
+  incomingConnections.clear();
+  sharerNames.clear();
+
+  grid.querySelectorAll('.tile').forEach((el) => el.remove());
+  updateEmptyState();
+
+  socket.emit('leave-room');
+
+  roomId = null;
+  myId = null;
+  knownUsersInRoom = 1;
+
+  roomScreen.style.display = 'none';
+  joinScreen.style.display = 'flex';
+  roomInput.value = '';
+  joinError.textContent = '';
+}
+
 // Alguém entrou na sala depois de mim
 socket.on('user-joined', ({ id, name }) => {
   knownUsersInRoom++;
   updatePeopleCount();
-  // Se eu já estava compartilhando, conecto com quem acabou de chegar
-  if (isSharing) {
-    connectToViewer(id);
-  }
+  // Não iniciamos a conexão daqui: é a pessoa que acabou de entrar quem pede
+  // pra assistir (via requestToWatch, logo depois do join-room). Se
+  // conectássemos dos dois lados, dava corrida — duas ofertas concorrentes
+  // pro mesmo par, deixando o vídeo preso em preto.
 });
 
 socket.on('user-left', ({ id }) => {
@@ -204,6 +231,8 @@ async function raiseBitrate(sender) {
 
 // Quem está compartilhando: cria uma conexão de saída para um espectador
 function connectToViewer(viewerId) {
+  outgoingConnections.get(viewerId)?.close();
+
   const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
   outgoingConnections.set(viewerId, pc);
 
@@ -236,6 +265,10 @@ socket.on('offer', async ({ from, offer, name }) => {
   // Offer de verdade: alguém está compartilhando a tela pra mim
   if (name) sharerNames.set(from, name);
 
+  // Se por algum motivo já existia uma conexão antiga com essa pessoa, fecha
+  // antes de abrir outra (evita duas conexões concorrentes / tela presa em preto)
+  incomingConnections.get(from)?.close();
+
   const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
   incomingConnections.set(from, pc);
 
@@ -257,7 +290,13 @@ socket.on('offer', async ({ from, offer, name }) => {
 
 socket.on('answer', async ({ from, answer }) => {
   const pc = outgoingConnections.get(from);
-  if (pc) await pc.setRemoteDescription(new RTCSessionDescription(answer));
+  if (pc) {
+    try {
+      await pc.setRemoteDescription(new RTCSessionDescription(answer));
+    } catch (err) {
+      console.warn('Erro ao processar answer:', err);
+    }
+  }
 });
 
 socket.on('ice-candidate', async ({ from, candidate }) => {

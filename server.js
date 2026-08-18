@@ -80,7 +80,7 @@ io.on('connection', (socket) => {
     io.to(to).emit('ice-candidate', { from: socket.id, candidate });
   });
 
-  socket.on('disconnect', () => {
+  function leaveCurrentRoom() {
     if (!currentRoom) return;
     const room = rooms.get(currentRoom);
     if (room) {
@@ -88,7 +88,15 @@ io.on('connection', (socket) => {
       if (room.size === 0) rooms.delete(currentRoom);
     }
     socket.to(currentRoom).emit('user-left', { id: socket.id });
-  });
+    socket.leave(currentRoom);
+    socket.data.sharing = false;
+    currentRoom = null;
+  }
+
+  // Sair da sala sem desconectar (pra poder entrar em outra sala em seguida)
+  socket.on('leave-room', leaveCurrentRoom);
+
+  socket.on('disconnect', leaveCurrentRoom);
 });
 
 const PORT = process.env.PORT || 3000;

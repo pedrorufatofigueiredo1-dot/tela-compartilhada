@@ -125,6 +125,12 @@
     }
     #share-btn:hover { background: var(--accent-hover); }
     #share-btn.sharing { background: var(--danger); }
+    #leave-btn {
+      background: transparent;
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+    }
+    #leave-btn:hover { color: var(--danger); border-color: var(--danger); }
     #people-count {
       font-size: 13px;
       color: var(--text-muted);
@@ -298,6 +304,7 @@
           <option value="high" selected>Qualidade: Alta</option>
         </select>
         <button id="share-btn">Compartilhar minha tela</button>
+        <button id="leave-btn" title="Sair da sala">Sair</button>
       </div>
     </header>
     <div id="grid">
