@@ -88,6 +88,23 @@
       margin-top: 12px;
       min-height: 16px;
     }
+    .app-download-link {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 18px;
+      padding: 11px 16px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 500;
+      transition: border-color .15s ease, color .15s ease;
+    }
+    .app-download-link:hover { border-color: var(--accent); color: var(--text); }
+    .app-download-link svg { width: 16px; height: 16px; flex-shrink: 0; }
 
     /* Tela da sala */
     #room-screen { display: none; min-height: 100vh; flex-direction: column; }
@@ -261,6 +278,11 @@
 
       <button class="btn-primary" id="join-btn">Entrar na sala</button>
       <div id="join-error"></div>
+
+      <a class="app-download-link" href="https://github.com/pedrorufatofigueiredo1-dot/tela-compartilhada/releases/download/app-v1.0.0/Tela.Compartilhada.Setup.1.0.0.exe">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Baixar o app para Windows
+      </a>
     </div>
   </div>
 
