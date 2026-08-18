@@ -236,6 +236,14 @@ socket.on('ice-candidate', async ({ from, candidate }) => {
 
 // ---------- Grade de vídeos ----------
 
+const ICONS = {
+  volumeOn: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="4 9 9 9 13 5 13 19 9 15 4 15 4 9"/><path d="M17 8a5 5 0 0 1 0 8"/><path d="M19.5 5.5a9 9 0 0 1 0 13"/></svg>',
+  volumeOff: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="4 9 9 9 13 5 13 19 9 15 4 15 4 9"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>',
+  fullscreenOpen: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>',
+  fullscreenClose: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3v3a2 2 0 0 1-2 2H3"/><path d="M21 8h-3a2 2 0 0 1-2-2V3"/><path d="M3 16h3a2 2 0 0 1 2 2v3"/><path d="M16 21v-3a2 2 0 0 1 2-2h3"/></svg>',
+  pin: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="14" height="10" rx="2"/><path d="M22 8v6a2 2 0 0 1-2 2h-4"/><path d="M6 20v-4"/><path d="M12 20v-2"/></svg>'
+};
+
 function showTile(id, name, stream) {
   removeTile(id);
 
@@ -248,12 +256,97 @@ function showTile(id, name, stream) {
   video.playsInline = true;
   video.srcObject = stream;
 
-  const label = document.createElement('div');
-  label.className = 'label';
-  label.textContent = name;
+  const overlay = document.createElement('div');
+  overlay.className = 'tile-overlay';
+
+  const nameTag = document.createElement('div');
+  nameTag.className = 'name-tag';
+  nameTag.textContent = name;
+
+  const controlsBar = document.createElement('div');
+  controlsBar.className = 'controls-bar';
+
+  // Botão mutar/desmutar
+  const muteBtn = document.createElement('button');
+  muteBtn.className = 'ctrl-btn';
+  muteBtn.title = 'Mutar';
+  muteBtn.innerHTML = ICONS.volumeOn;
+  muteBtn.addEventListener('click', () => {
+    video.muted = !video.muted;
+    muteBtn.innerHTML = video.muted ? ICONS.volumeOff : ICONS.volumeOn;
+    muteBtn.title = video.muted ? 'Desmutar' : 'Mutar';
+    muteBtn.classList.toggle('active', video.muted);
+  });
+
+  // Slider de volume
+  const volumeSlider = document.createElement('input');
+  volumeSlider.type = 'range';
+  volumeSlider.className = 'volume-slider';
+  volumeSlider.min = '0';
+  volumeSlider.max = '100';
+  volumeSlider.value = '100';
+  volumeSlider.title = 'Volume';
+  volumeSlider.addEventListener('input', () => {
+    const vol = Number(volumeSlider.value) / 100;
+    video.volume = vol;
+    video.muted = vol === 0;
+    muteBtn.innerHTML = video.muted ? ICONS.volumeOff : ICONS.volumeOn;
+    muteBtn.classList.toggle('active', video.muted);
+  });
+
+  // Botão tela cheia (do card, não só do vídeo, pra manter os controles acessíveis)
+  const fullscreenBtn = document.createElement('button');
+  fullscreenBtn.className = 'ctrl-btn';
+  fullscreenBtn.title = 'Tela cheia';
+  fullscreenBtn.innerHTML = ICONS.fullscreenOpen;
+  fullscreenBtn.addEventListener('click', () => {
+    if (document.fullscreenElement === tile) {
+      document.exitFullscreen();
+    } else {
+      tile.requestFullscreen?.();
+    }
+  });
+  tile.addEventListener('fullscreenchange', () => {
+    const isFs = document.fullscreenElement === tile;
+    fullscreenBtn.innerHTML = isFs ? ICONS.fullscreenClose : ICONS.fullscreenOpen;
+    fullscreenBtn.title = isFs ? 'Sair da tela cheia' : 'Tela cheia';
+  });
+
+  // Botão fixar em mini janela (Picture-in-Picture nativo do navegador)
+  const pipBtn = document.createElement('button');
+  pipBtn.className = 'ctrl-btn';
+  pipBtn.title = 'Fixar em mini janela';
+  pipBtn.innerHTML = ICONS.pin;
+  if (document.pictureInPictureEnabled) {
+    pipBtn.addEventListener('click', async () => {
+      try {
+        if (document.pictureInPictureElement === video) {
+          await document.exitPictureInPicture();
+        } else {
+          await video.requestPictureInPicture();
+        }
+      } catch (err) {
+        console.warn('Erro ao ativar mini janela (PiP):', err);
+      }
+    });
+    video.addEventListener('enterpictureinpicture', () => pipBtn.classList.add('active'));
+    video.addEventListener('leavepictureinpicture', () => pipBtn.classList.remove('active'));
+  } else {
+    pipBtn.disabled = true;
+    pipBtn.style.opacity = '0.35';
+    pipBtn.title = 'Mini janela não suportada neste navegador';
+  }
+
+  controlsBar.appendChild(muteBtn);
+  controlsBar.appendChild(volumeSlider);
+  controlsBar.appendChild(fullscreenBtn);
+  controlsBar.appendChild(pipBtn);
+
+  overlay.appendChild(nameTag);
+  overlay.appendChild(controlsBar);
 
   tile.appendChild(video);
-  tile.appendChild(label);
+  tile.appendChild(overlay);
   grid.appendChild(tile);
   updateEmptyState();
 }

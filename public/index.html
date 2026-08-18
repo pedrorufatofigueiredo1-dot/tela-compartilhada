@@ -131,6 +131,17 @@
       overflow: hidden;
       position: relative;
       aspect-ratio: 16 / 9;
+      transition: border-color .15s ease, box-shadow .15s ease;
+    }
+    .tile:hover {
+      border-color: #3a3f4c;
+      box-shadow: 0 4px 18px rgba(0,0,0,.35);
+    }
+    .tile:fullscreen,
+    .tile:-webkit-full-screen {
+      aspect-ratio: unset;
+      border-radius: 0;
+      background: #000;
     }
     .tile video {
       width: 100%;
@@ -139,14 +150,71 @@
       background: #000;
       display: block;
     }
-    .tile .label {
+
+    /* Overlay com nome + barra de controles */
+    .tile-overlay {
       position: absolute;
-      bottom: 8px;
-      left: 8px;
-      background: rgba(0,0,0,0.6);
-      padding: 4px 10px;
-      border-radius: 6px;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      pointer-events: none;
+    }
+    .tile .name-tag {
+      pointer-events: none;
+      align-self: flex-start;
+      margin: 10px;
+      background: rgba(0,0,0,0.55);
+      backdrop-filter: blur(4px);
+      padding: 5px 11px;
+      border-radius: 7px;
       font-size: 12px;
+      font-weight: 500;
+    }
+
+    .controls-bar {
+      pointer-events: none;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0 10px 10px;
+      padding: 6px 8px;
+      background: rgba(15,17,21,0.7);
+      backdrop-filter: blur(6px);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 10px;
+      opacity: 0;
+      transform: translateY(6px);
+      transition: opacity .15s ease, transform .15s ease;
+    }
+    .tile:hover .controls-bar,
+    .tile.controls-pinned .controls-bar {
+      pointer-events: auto;
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .ctrl-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 30px;
+      height: 30px;
+      border-radius: 7px;
+      background: transparent;
+      color: var(--text);
+      padding: 0;
+      flex-shrink: 0;
+    }
+    .ctrl-btn:hover { background: rgba(255,255,255,0.1); }
+    .ctrl-btn.active { color: var(--accent); }
+    .ctrl-btn svg { width: 17px; height: 17px; }
+    .volume-slider {
+      flex: 1;
+      min-width: 40px;
+      accent-color: var(--accent);
+      height: 16px;
+      padding: 0;
+      background: transparent;
     }
     #empty-state {
       grid-column: 1 / -1;
