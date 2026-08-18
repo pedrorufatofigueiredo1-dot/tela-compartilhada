@@ -333,6 +333,15 @@ function showTile(id, name, stream, { muted = false } = {}) {
   video.muted = muted;
   video.srcObject = stream;
 
+  // Ajusta a proporção do card pra bater com a resolução real de quem
+  // compartilha (evita barras pretas em telas ultrawide, verticais, etc.),
+  // independente da resolução de quem está assistindo.
+  video.addEventListener('loadedmetadata', () => {
+    if (video.videoWidth && video.videoHeight) {
+      tile.style.aspectRatio = `${video.videoWidth} / ${video.videoHeight}`;
+    }
+  });
+
   const overlay = document.createElement('div');
   overlay.className = 'tile-overlay';
 
