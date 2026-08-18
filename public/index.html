@@ -115,6 +115,16 @@
       border: 1px solid var(--border);
       border-radius: 8px;
     }
+    #quality-select {
+      background: #12141a;
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 13px;
+      padding: 8px 10px;
+      cursor: pointer;
+    }
+    #quality-select:disabled { opacity: .5; cursor: not-allowed; }
 
     #grid {
       flex: 1;
@@ -161,9 +171,14 @@
       justify-content: space-between;
       pointer-events: none;
     }
+    .tile-top-row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      pointer-events: none;
+    }
     .tile .name-tag {
       pointer-events: none;
-      align-self: flex-start;
       margin: 10px;
       background: rgba(0,0,0,0.55);
       backdrop-filter: blur(4px);
@@ -171,6 +186,36 @@
       border-radius: 7px;
       font-size: 12px;
       font-weight: 500;
+    }
+    .audio-meter {
+      pointer-events: none;
+      margin: 10px;
+      background: rgba(0,0,0,0.55);
+      backdrop-filter: blur(4px);
+      padding: 5px 9px;
+      border-radius: 7px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-variant-numeric: tabular-nums;
+      flex-shrink: 0;
+    }
+    .audio-meter .meter-value { width: 30px; text-align: right; }
+    .audio-meter .bar-track {
+      width: 36px;
+      height: 4px;
+      border-radius: 2px;
+      background: rgba(255,255,255,0.15);
+      overflow: hidden;
+    }
+    .audio-meter .bar-fill {
+      height: 100%;
+      width: 0%;
+      background: var(--accent);
+      transition: width .08s linear, background-color .15s ease;
     }
 
     .controls-bar {
@@ -251,6 +296,11 @@
       <div class="room-info">Sala: <b id="room-name-label"></b></div>
       <div class="header-actions">
         <span id="people-count">1 pessoa</span>
+        <select id="quality-select" title="Qualidade da sua transmissão">
+          <option value="low">Qualidade: Leve</option>
+          <option value="medium">Qualidade: Média</option>
+          <option value="high" selected>Qualidade: Alta</option>
+        </select>
         <button id="share-btn">Compartilhar minha tela</button>
       </div>
     </header>
