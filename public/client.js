@@ -100,6 +100,9 @@ shareBtn.addEventListener('click', async () => {
   // Se o usuário parar pela UI nativa do navegador (botão "Parar de compartilhar")
   localStream.getVideoTracks()[0].addEventListener('ended', stopSharing);
 
+  // Mostra a própria tela pra quem está compartilhando também poder ver
+  showTile('self', `${myName} (você)`, localStream, { muted: true });
+
   socket.emit('start-sharing');
 });
 
@@ -117,6 +120,7 @@ function stopSharing() {
   outgoingConnections.forEach((pc) => pc.close());
   outgoingConnections.clear();
 
+  removeTile('self');
   socket.emit('stop-sharing');
 }
 
@@ -244,7 +248,7 @@ const ICONS = {
   pin: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="14" height="10" rx="2"/><path d="M22 8v6a2 2 0 0 1-2 2h-4"/><path d="M6 20v-4"/><path d="M12 20v-2"/></svg>'
 };
 
-function showTile(id, name, stream) {
+function showTile(id, name, stream, { muted = false } = {}) {
   removeTile(id);
 
   const tile = document.createElement('div');
@@ -254,6 +258,7 @@ function showTile(id, name, stream) {
   const video = document.createElement('video');
   video.autoplay = true;
   video.playsInline = true;
+  video.muted = muted;
   video.srcObject = stream;
 
   const overlay = document.createElement('div');
@@ -269,8 +274,9 @@ function showTile(id, name, stream) {
   // Botão mutar/desmutar
   const muteBtn = document.createElement('button');
   muteBtn.className = 'ctrl-btn';
-  muteBtn.title = 'Mutar';
-  muteBtn.innerHTML = ICONS.volumeOn;
+  muteBtn.title = video.muted ? 'Desmutar' : 'Mutar';
+  muteBtn.innerHTML = video.muted ? ICONS.volumeOff : ICONS.volumeOn;
+  muteBtn.classList.toggle('active', video.muted);
   muteBtn.addEventListener('click', () => {
     video.muted = !video.muted;
     muteBtn.innerHTML = video.muted ? ICONS.volumeOff : ICONS.volumeOn;
