@@ -281,51 +281,6 @@ const ICONS = {
   pin: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="14" height="10" rx="2"/><path d="M22 8v6a2 2 0 0 1-2 2h-4"/><path d="M6 20v-4"/><path d="M12 20v-2"/></svg>'
 };
 
-// id do tile -> função de limpeza do medidor de áudio (fecha o AudioContext)
-const audioMeterCleanups = new Map();
-
-// Mostra o nível de áudio (0-100) em tempo real, pra calibrar volume
-function attachAudioMeter(stream, valueEl, fillEl) {
-  if (stream.getAudioTracks().length === 0) return null;
-
-  let audioCtx;
-  try {
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  } catch {
-    return null;
-  }
-
-  const source = audioCtx.createMediaStreamSource(stream);
-  const analyser = audioCtx.createAnalyser();
-  analyser.fftSize = 512;
-  analyser.smoothingTimeConstant = 0.6;
-  source.connect(analyser);
-  const data = new Uint8Array(analyser.frequencyBinCount);
-
-  let rafId;
-  function tick() {
-    analyser.getByteTimeDomainData(data);
-    let sum = 0;
-    for (let i = 0; i < data.length; i++) {
-      const v = (data[i] - 128) / 128;
-      sum += v * v;
-    }
-    const rms = Math.sqrt(sum / data.length);
-    const level = Math.min(100, Math.round(rms * 280));
-    valueEl.textContent = `${level}%`;
-    fillEl.style.width = `${level}%`;
-    fillEl.style.background = level > 85 ? 'var(--danger)' : 'var(--accent)';
-    rafId = requestAnimationFrame(tick);
-  }
-  tick();
-
-  return () => {
-    cancelAnimationFrame(rafId);
-    source.disconnect();
-    audioCtx.close().catch(() => {});
-  };
-}
-
 function showTile(id, name, stream, { muted = false } = {}) {
   removeTile(id);
 
@@ -342,32 +297,9 @@ function showTile(id, name, stream, { muted = false } = {}) {
   const overlay = document.createElement('div');
   overlay.className = 'tile-overlay';
 
-  const topRow = document.createElement('div');
-  topRow.className = 'tile-top-row';
-
   const nameTag = document.createElement('div');
   nameTag.className = 'name-tag';
   nameTag.textContent = name;
-
-  const audioMeter = document.createElement('div');
-  audioMeter.className = 'audio-meter';
-  const meterValue = document.createElement('span');
-  meterValue.className = 'meter-value';
-  meterValue.textContent = '—';
-  const meterTrack = document.createElement('div');
-  meterTrack.className = 'bar-track';
-  const meterFill = document.createElement('div');
-  meterFill.className = 'bar-fill';
-  meterTrack.appendChild(meterFill);
-  audioMeter.appendChild(meterValue);
-  audioMeter.appendChild(meterTrack);
-
-  const meterCleanup = attachAudioMeter(stream, meterValue, meterFill);
-  if (meterCleanup) audioMeterCleanups.set(id, meterCleanup);
-  else audioMeter.style.display = 'none';
-
-  topRow.appendChild(nameTag);
-  topRow.appendChild(audioMeter);
 
   const controlsBar = document.createElement('div');
   controlsBar.className = 'controls-bar';
@@ -385,7 +317,7 @@ function showTile(id, name, stream, { muted = false } = {}) {
     muteBtn.classList.toggle('active', video.muted);
   });
 
-  // Slider de volume
+  // Slider de volume + indicador numérico (tipo OSD de TV)
   const volumeSlider = document.createElement('input');
   volumeSlider.type = 'range';
   volumeSlider.className = 'volume-slider';
@@ -393,10 +325,16 @@ function showTile(id, name, stream, { muted = false } = {}) {
   volumeSlider.max = '100';
   volumeSlider.value = '100';
   volumeSlider.title = 'Volume';
+
+  const volumeValue = document.createElement('span');
+  volumeValue.className = 'volume-value';
+  volumeValue.textContent = '100%';
+
   volumeSlider.addEventListener('input', () => {
     const vol = Number(volumeSlider.value) / 100;
     video.volume = vol;
     video.muted = vol === 0;
+    volumeValue.textContent = `${volumeSlider.value}%`;
     muteBtn.innerHTML = video.muted ? ICONS.volumeOff : ICONS.volumeOn;
     muteBtn.classList.toggle('active', video.muted);
   });
@@ -446,10 +384,11 @@ function showTile(id, name, stream, { muted = false } = {}) {
 
   controlsBar.appendChild(muteBtn);
   controlsBar.appendChild(volumeSlider);
+  controlsBar.appendChild(volumeValue);
   controlsBar.appendChild(fullscreenBtn);
   controlsBar.appendChild(pipBtn);
 
-  overlay.appendChild(topRow);
+  overlay.appendChild(nameTag);
   overlay.appendChild(controlsBar);
 
   tile.appendChild(video);
@@ -461,11 +400,6 @@ function showTile(id, name, stream, { muted = false } = {}) {
 function removeTile(id) {
   const el = document.getElementById(`tile-${id}`);
   if (el) el.remove();
-  const cleanup = audioMeterCleanups.get(id);
-  if (cleanup) {
-    cleanup();
-    audioMeterCleanups.delete(id);
-  }
   updateEmptyState();
 }
 

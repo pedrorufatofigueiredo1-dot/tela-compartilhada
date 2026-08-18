@@ -171,14 +171,9 @@
       justify-content: space-between;
       pointer-events: none;
     }
-    .tile-top-row {
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      pointer-events: none;
-    }
     .tile .name-tag {
       pointer-events: none;
+      align-self: flex-start;
       margin: 10px;
       background: rgba(0,0,0,0.55);
       backdrop-filter: blur(4px);
@@ -186,36 +181,6 @@
       border-radius: 7px;
       font-size: 12px;
       font-weight: 500;
-    }
-    .audio-meter {
-      pointer-events: none;
-      margin: 10px;
-      background: rgba(0,0,0,0.55);
-      backdrop-filter: blur(4px);
-      padding: 5px 9px;
-      border-radius: 7px;
-      font-size: 11px;
-      font-weight: 600;
-      color: var(--text-muted);
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-variant-numeric: tabular-nums;
-      flex-shrink: 0;
-    }
-    .audio-meter .meter-value { width: 30px; text-align: right; }
-    .audio-meter .bar-track {
-      width: 36px;
-      height: 4px;
-      border-radius: 2px;
-      background: rgba(255,255,255,0.15);
-      overflow: hidden;
-    }
-    .audio-meter .bar-fill {
-      height: 100%;
-      width: 0%;
-      background: var(--accent);
-      transition: width .08s linear, background-color .15s ease;
     }
 
     .controls-bar {
@@ -261,6 +226,15 @@
       height: 16px;
       padding: 0;
       background: transparent;
+    }
+    .volume-value {
+      width: 34px;
+      flex-shrink: 0;
+      text-align: right;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      font-variant-numeric: tabular-nums;
     }
     #empty-state {
       grid-column: 1 / -1;
