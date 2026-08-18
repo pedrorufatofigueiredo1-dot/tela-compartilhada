@@ -85,13 +85,20 @@ shareBtn.addEventListener('click', async () => {
   }
   try {
     localStream = await navigator.mediaDevices.getDisplayMedia({
-      video: { frameRate: 30 },
+      video: {
+        width: { ideal: 1920 },
+        height: { ideal: 1080 },
+        frameRate: { ideal: 30, max: 60 }
+      },
       audio: true // captura áudio da aba/sistema quando o navegador permitir
     });
   } catch (err) {
     alert('Não foi possível iniciar o compartilhamento de tela: ' + err.message);
     return;
   }
+
+  // Prioriza nitidez (texto/código) em vez de suavidade de movimento
+  localStream.getVideoTracks()[0].contentHint = 'detail';
 
   isSharing = true;
   shareBtn.textContent = 'Parar compartilhamento';
@@ -172,12 +179,28 @@ function requestToWatch(sharerId) {
   socket.emit('offer', { to: sharerId, offer: { type: 'request-connection' } });
 }
 
+const MAX_VIDEO_BITRATE = 6_000_000; // 6 Mbps por espectador, melhora bastante a nitidez de texto/código
+
+async function raiseBitrate(sender) {
+  try {
+    const params = sender.getParameters();
+    if (!params.encodings || params.encodings.length === 0) params.encodings = [{}];
+    params.encodings[0].maxBitrate = MAX_VIDEO_BITRATE;
+    await sender.setParameters(params);
+  } catch (err) {
+    console.warn('Não foi possível ajustar o bitrate:', err);
+  }
+}
+
 // Quem está compartilhando: cria uma conexão de saída para um espectador
 function connectToViewer(viewerId) {
   const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
   outgoingConnections.set(viewerId, pc);
 
-  localStream.getTracks().forEach((track) => pc.addTrack(track, localStream));
+  localStream.getTracks().forEach((track) => {
+    const sender = pc.addTrack(track, localStream);
+    if (track.kind === 'video') raiseBitrate(sender);
+  });
 
   pc.onicecandidate = (e) => {
     if (e.candidate) {

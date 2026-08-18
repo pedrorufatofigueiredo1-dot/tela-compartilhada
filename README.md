@@ -131,6 +131,11 @@ Sempre que precisar mudar algo:
 - **Rede simples**: com muitas pessoas compartilhando ao mesmo tempo numa
   sala cheia, a internet de quem compartilha pode pesar um pouco — para
   grupos de até 5-6 pessoas funciona bem
+- **Qualidade de vídeo**: o site pede a maior nitidez possível (até 1080p,
+  até 6 Mbps por espectador) pra deixar texto/código legível. Isso usa mais
+  internet de upload de quem compartilha — quanto mais gente assistindo na
+  mesma sala, mais upload é consumido (é o modelo peer-to-peer, cada
+  espectador é uma "cópia" enviada separadamente)
 
 ---
 
