@@ -19,6 +19,35 @@ const incomingConnections = new Map();
 // id -> nome (de quem está compartilhando, para exibir na grade)
 const sharerNames = new Map();
 
+// Candidatos ICE que chegam antes da descrição remota estar pronta ficam
+// aqui até dar pra aplicar (senão são perdidos, o que pode forçar um
+// caminho de rede pior/mais lento). Chave prefixada com "in:"/"out:" porque
+// duas pessoas podem estar compartilhando uma pra outra ao mesmo tempo —
+// sem o prefixo, um candidato podia ir pra conexão errada.
+const pendingIceCandidates = new Map();
+
+function queueOrApplyIceCandidate(key, pc, candidate) {
+  if (pc.remoteDescription) {
+    pc.addIceCandidate(candidate).catch((err) => console.warn('Erro ao adicionar ICE candidate:', err));
+  } else {
+    if (!pendingIceCandidates.has(key)) pendingIceCandidates.set(key, []);
+    pendingIceCandidates.get(key).push(candidate);
+  }
+}
+
+async function flushPendingIceCandidates(key, pc) {
+  const queued = pendingIceCandidates.get(key);
+  if (!queued) return;
+  pendingIceCandidates.delete(key);
+  for (const candidate of queued) {
+    try {
+      await pc.addIceCandidate(candidate);
+    } catch (err) {
+      console.warn('Erro ao adicionar ICE candidate (fila):', err);
+    }
+  }
+}
+
 // Elementos
 const joinScreen = document.getElementById('join-screen');
 const roomScreen = document.getElementById('room-screen');
@@ -136,7 +165,10 @@ function stopSharing() {
     localStream = null;
   }
 
-  outgoingConnections.forEach((pc) => pc.close());
+  outgoingConnections.forEach((pc, id) => {
+    pc.close();
+    pendingIceCandidates.delete('out:' + id);
+  });
   outgoingConnections.clear();
 
   removeTile('self');
@@ -151,7 +183,10 @@ leaveBtn.addEventListener('click', leaveRoom);
 function leaveRoom() {
   if (isSharing) stopSharing();
 
-  incomingConnections.forEach((pc) => pc.close());
+  incomingConnections.forEach((pc, id) => {
+    pc.close();
+    pendingIceCandidates.delete('in:' + id);
+  });
   incomingConnections.clear();
   sharerNames.clear();
 
@@ -187,10 +222,12 @@ socket.on('user-left', ({ id }) => {
   if (outgoingConnections.has(id)) {
     outgoingConnections.get(id).close();
     outgoingConnections.delete(id);
+    pendingIceCandidates.delete('out:' + id);
   }
   if (incomingConnections.has(id)) {
     incomingConnections.get(id).close();
     incomingConnections.delete(id);
+    pendingIceCandidates.delete('in:' + id);
   }
   removeTile(id);
 });
@@ -206,6 +243,7 @@ socket.on('user-stopped-sharing', ({ id }) => {
   if (incomingConnections.has(id)) {
     incomingConnections.get(id).close();
     incomingConnections.delete(id);
+    pendingIceCandidates.delete('in:' + id);
   }
   removeTile(id);
 });
@@ -218,32 +256,50 @@ function requestToWatch(sharerId) {
   socket.emit('offer', { to: sharerId, offer: { type: 'request-connection' } });
 }
 
-async function raiseBitrate(sender) {
+// Ajusta o bitrate máximo e pede pro codificador priorizar nitidez em vez
+// de suavidade de movimento quando a rede apertar — é a prática recomendada
+// pra compartilhamento de tela (texto legível importa mais que fluidez de
+// animação).
+async function tuneVideoSender(sender) {
   try {
     const params = sender.getParameters();
     if (!params.encodings || params.encodings.length === 0) params.encodings = [{}];
     params.encodings[0].maxBitrate = currentQuality.bitrate;
+    params.degradationPreference = 'maintain-resolution';
     await sender.setParameters(params);
   } catch (err) {
-    console.warn('Não foi possível ajustar o bitrate:', err);
+    console.warn('Não foi possível ajustar a transmissão:', err);
   }
 }
 
 // Quem está compartilhando: cria uma conexão de saída para um espectador
 function connectToViewer(viewerId) {
   outgoingConnections.get(viewerId)?.close();
+  pendingIceCandidates.delete('out:' + viewerId);
 
   const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
   outgoingConnections.set(viewerId, pc);
 
   localStream.getTracks().forEach((track) => {
     const sender = pc.addTrack(track, localStream);
-    if (track.kind === 'video') raiseBitrate(sender);
+    if (track.kind === 'video') tuneVideoSender(sender);
   });
 
   pc.onicecandidate = (e) => {
     if (e.candidate) {
-      socket.emit('ice-candidate', { to: viewerId, candidate: e.candidate });
+      socket.emit('ice-candidate', { to: viewerId, candidate: e.candidate, role: 'outgoing' });
+    }
+  };
+
+  // Se a conexão cair de vez (rede instável), não fica travada pra sempre —
+  // limpa e deixa o outro lado pedir de novo (ele detecta a mesma falha e
+  // chama requestToWatch sozinho).
+  pc.oniceconnectionstatechange = () => {
+    if (pc.iceConnectionState === 'failed' && outgoingConnections.get(viewerId) === pc) {
+      console.warn('Conexão de saída travou, encerrando pra permitir nova tentativa:', viewerId);
+      outgoingConnections.delete(viewerId);
+      pendingIceCandidates.delete('out:' + viewerId);
+      pc.close();
     }
   };
 
@@ -268,13 +324,14 @@ socket.on('offer', async ({ from, offer, name }) => {
   // Se por algum motivo já existia uma conexão antiga com essa pessoa, fecha
   // antes de abrir outra (evita duas conexões concorrentes / tela presa em preto)
   incomingConnections.get(from)?.close();
+  pendingIceCandidates.delete('in:' + from);
 
   const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
   incomingConnections.set(from, pc);
 
   pc.onicecandidate = (e) => {
     if (e.candidate) {
-      socket.emit('ice-candidate', { to: from, candidate: e.candidate });
+      socket.emit('ice-candidate', { to: from, candidate: e.candidate, role: 'incoming' });
     }
   };
 
@@ -282,10 +339,43 @@ socket.on('offer', async ({ from, offer, name }) => {
     showTile(from, sharerNames.get(from) || 'Participante', e.streams[0]);
   };
 
-  await pc.setRemoteDescription(new RTCSessionDescription(offer));
-  const answer = await pc.createAnswer();
-  await pc.setLocalDescription(answer);
-  socket.emit('answer', { to: from, answer: pc.localDescription });
+  // Se a conexão cair de vez, fecha e pede uma nova do zero em vez de
+  // deixar a tela travada/congelada pra sempre.
+  pc.oniceconnectionstatechange = () => {
+    if (pc.iceConnectionState === 'failed' && incomingConnections.get(from) === pc) {
+      console.warn('Conexão com', from, 'falhou — tentando reconectar');
+      incomingConnections.delete(from);
+      pendingIceCandidates.delete('in:' + from);
+      pc.close();
+      removeTile(from);
+      requestToWatch(from);
+    }
+  };
+
+  try {
+    await pc.setRemoteDescription(new RTCSessionDescription(offer));
+    await flushPendingIceCandidates('in:' + from, pc);
+
+    // Prefere VP9 quando disponível: comprime melhor que VP8/H.264 no mesmo
+    // bitrate, com ganho perceptível em texto/código (bordas mais nítidas).
+    try {
+      const transceiver = pc.getTransceivers().find((t) => t.receiver?.track?.kind === 'video');
+      const caps = window.RTCRtpReceiver?.getCapabilities?.('video');
+      if (transceiver?.setCodecPreferences && caps) {
+        const vp9 = caps.codecs.filter((c) => /VP9/i.test(c.mimeType));
+        const others = caps.codecs.filter((c) => !/VP9/i.test(c.mimeType));
+        if (vp9.length > 0) transceiver.setCodecPreferences([...vp9, ...others]);
+      }
+    } catch (err) {
+      console.warn('Não foi possível preferir VP9:', err);
+    }
+
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+    socket.emit('answer', { to: from, answer: pc.localDescription });
+  } catch (err) {
+    console.warn('Erro ao processar offer:', err);
+  }
 });
 
 socket.on('answer', async ({ from, answer }) => {
@@ -293,21 +383,33 @@ socket.on('answer', async ({ from, answer }) => {
   if (pc) {
     try {
       await pc.setRemoteDescription(new RTCSessionDescription(answer));
+      await flushPendingIceCandidates('out:' + from, pc);
     } catch (err) {
       console.warn('Erro ao processar answer:', err);
     }
   }
 });
 
-socket.on('ice-candidate', async ({ from, candidate }) => {
-  const pc = outgoingConnections.get(from) || incomingConnections.get(from);
-  if (pc) {
-    try {
-      await pc.addIceCandidate(candidate);
-    } catch (err) {
-      console.warn('Erro ao adicionar ICE candidate', err);
-    }
+// "role" diz de qual conexão, do lado de quem mandou, o candidato veio:
+// 'outgoing' = a pessoa está me enviando a tela dela → aplica na MINHA
+// conexão de entrada; 'incoming' = a pessoa está assistindo a minha →
+// aplica na MINHA conexão de saída. Sem isso, se duas pessoas estiverem
+// compartilhando uma pra outra ao mesmo tempo, o candidato podia ir pro
+// par errado.
+socket.on('ice-candidate', ({ from, candidate, role }) => {
+  let pc, key;
+  if (role === 'outgoing') {
+    pc = incomingConnections.get(from);
+    key = 'in:' + from;
+  } else if (role === 'incoming') {
+    pc = outgoingConnections.get(from);
+    key = 'out:' + from;
+  } else {
+    // Compatibilidade caso "role" não venha por algum motivo
+    pc = outgoingConnections.get(from) || incomingConnections.get(from);
+    key = (outgoingConnections.get(from) === pc ? 'out:' : 'in:') + from;
   }
+  if (pc) queueOrApplyIceCandidate(key, pc, candidate);
 });
 
 // ---------- Grade de vídeos ----------
